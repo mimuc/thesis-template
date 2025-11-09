@@ -64,7 +64,7 @@
 \DeclareBoolOption[false]{setCoverPageNumberToMinusOne}
 \DeclareBoolOption[false]{aids}
 \DeclareStringOption[aid tools not set]{aidstools}
-\DeclareStringOption[aid contributions not set]{adiscontributions}
+\DeclareStringOption[aid contributions not set]{aidscontributions}
 \DeclareStringOption[extra aid contributions not set]{aidsextracontributions}
 
 % ------------------------------
@@ -403,7 +403,7 @@
             \huge \textsf{\textbf{\@labelAids}}}%
             \vskip 1cm\relax
             \ifthenelse{\boolean{MCS@aids}}{
-                \@AidsTextFirst \MCS@aidstools~\@AidsTextSecond ~\MCS@adiscontributions. \MCS@aidsextracontributions~\@AidsTextThrid
+                \@AidsTextFirst \MCS@aidstools~\@AidsTextSecond ~\MCS@aidscontributions. \MCS@aidsextracontributions~\@AidsTextThrid
             }{\@AidsTextNone}
             \vskip 4cm\relax
             \hrulefill
