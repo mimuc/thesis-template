@@ -1,90 +1,105 @@
-# Executables
-latexmk = latexmk
+# change if you for whatever reason have/want a different main file name
+MASTER = main
 
-## Required for thumbpdf as latexmk does not support thumbpdf by itself
-pdflatex = pdflatex
+# where your content files live
+TEX_DIR = content
+PRE_DIR = preambel
+GFX_DIR = graphics
 
-## evince at linux
-viewer = 'C:/Program Files (x86)/SumatraPDF/SumatraPDF.exe'
+LATEXMK = latexmk
 
-## Editor
-editor = gedit
-
-
-# Main file name
-MASTER_TEX = main-german.tex
-LITERATURE = bibliography.bib
+# Flags for latexmk:
+# -pdf:                Force PDF generation (not DVI)
+# -use-make:           If a file is missing, ask 'make' to generate it (crucial for .charcount.txt)
+# -interaction=nonstop: Don't freeze the terminal if there is a tiny error
+LATEXMK_FLAGS = -pdf -use-make -interaction=nonstopmode
 
 
-# Derived file names
-SRC = $(shell basename $(MASTER_TEX) .tex)
-TEX_FILES = $(wildcard preambel/*.tex content/*.tex)
-GFX_FILES = $(wildcard graphics/*)
+DATE := $(shell date +%Y%m%d-%H%M)
 
-PDF = $(SRC).pdf
-AUX = $(SRC).aux
+# Windows FilePaths were hardcoded before, but now we use uname to detect the OS.
+OS := $(shell uname -s)
 
-date=$(shell date +%Y%m%d%H%M)
+ifeq ($(OS),Darwin)
+	# macOS
+	OPEN = open
+else ifeq ($(OS),Linux)
+	# Linux
+	OPEN = xdg-open
+else
+	# Windows (Git Bash / WSL)
+	OPEN = start
+endif
 
-# was wird gemacht, falls nur make aufgerufen wird
-#hier sollte noch der aspell check rein für jedes file einzeln über for schleife
+
+
+SRC = $(MASTER).tex
+TEX_FILES = $(wildcard $(TEX_DIR)/*.tex $(PRE_DIR)/*.tex)
+GFX_FILES = $(wildcard $(GFX_DIR)/*)
+BIB_FILES = $(wildcard *.bib)
+PDF = $(MASTER).pdf
+
+
+
+.PHONY: all clean distclean view help spellcheck stand html
+
+
 all: $(PDF)
-.PHONY: $(PDF)
 
-$(PDF): $(MASTER_TEX) $(LITERATURE) $(TEX_FILES) $(GFX_FILES)
-	$(latexmk) $(MASTER_TEX)
+# We depend on .charcount.txt because the LMU template tries to read it
+$(PDF): $(SRC) $(TEX_FILES) $(GFX_FILES) $(BIB_FILES) .charcount.txt
+	$(LATEXMK) $(LATEXMK_FLAGS) $(MASTER)
 
+
+# helper making the build not crash when texcount is not installed
+.charcount.txt: $(SRC) $(TEX_FILES)
+	@echo "Calculating character count..."
+	@if command -v texcount >/dev/null 2>&1; then \
+		texcount -1 -sum -merge $(MASTER).tex > .charcount.txt; \
+	else \
+		echo "texcount tool not found. Defaulting count to 0 to prevent crash."; \
+		echo "0" > .charcount.txt; \
+	fi
+
+# housekeeping
 clean:
-	$(latexmk) -C
+	$(LATEXMK) -c
+	rm -f .charcount.txt
 
-# Endversion - mit eingebauter Seitenvorschau
-# mehrere Durchlaeufe, da bei longtable einige runs mehr vonnoeten sind...
-final: $(PDF)
-	thumbpdf $(PDF)
-	$(pdflatex) $(MASTER_TEX)
+# 'make distclean' removes EVERYTHING, including the PDF. Good for a fresh start.
+distclean: clean
+	$(LATEXMK) -C
+	rm -f *.synctex.gz *.html *.css *.4ct *.4tc *.idv *.lg *.tmp *.xref
 
-mrproper: clean
-	rm -f *~
 
-ps: $(PDF)
-	pdftops $(PDF)
+# opens the PDF in your default system viewer
+view: $(PDF)
+	$(OPEN) $(PDF) &
 
-pdf: $(PDF)
+# german spelcheck
+spellcheck:
+	@echo "Starting spellcheck for German..."
+	@for file in $(TEX_FILES); do \
+		echo "Checking $$file..."; \
+		aspell --lang=de_DE --mode=tex check $$file; \
+	done
 
-view: pdf
-	$(viewer) $(PDF)&
 
-edit:
-	$(viewer) $(PDF)&
-	$(editor) *.tex&
-
-6: ps
-	psnup -6 $(SRC).ps > 6.ps
-
+# backup creation with timestamp
 stand: $(PDF)
-	cp $(PDF) "Ausarbeitung - Stand $(date).pdf"
+	cp $(PDF) "Ausarbeitung - Stand $(DATE).pdf"
 
-standps: ps
-	psnup -2 $(SRC).ps > "Ausarbeitung - Stand $(date).ps"
 
-##
-# Das ganze am Besten vor der final und als eigene Version ala make spellcheck
-# aspell line: aspell -t -l de_DE -d german -c --per-conf= "Dateiname" *.tex -T utf-8 --encoding=utf-8
-# Schreiben der LaTeX-Befehle in eine config Dateiname. Sieht so aus
-# add-tex-command begin PO // PO := prüfe []{} ;; po := ignoriere []{}
-# Leerzeichen ungleich Tabs !!!
-# Config File nicht vergessen
-aspell:
-	for tex in $(TEX_FILES);	\
-		do	\
-			aspell -t -l de_DE -d german -T utf-8 -c $$tex --encoding=utf-8;	\
-		done
-#
-##
+# Generates an HTML version (if you need it)
+html: $(PDF)
+	htlatex $(MASTER) "html,word,charset=utf8" " -utf8"
 
-showundef:
-	grep undefined $(LOG)
-
-html: clean pdf
-	rm $(AUX)
-	htlatex $(SRC) "html,word,charset=utf8" " -utf8"
+# shows you all commands
+help:
+	@echo "LMU LaTeX Makefile - Available commands:"
+	@echo "  make           : Build the PDF (default)"
+	@echo "  make view      : Build and open the PDF"
+	@echo "  make stand     : Save a timestamped backup of the PDF"
+	@echo "  make spellcheck: Run spellcheck on all content files"
+	@echo "  make clean     : Remove log files and temp files"
+	@echo "  make distclean : Remove everything including the PDF"
